@@ -31,14 +31,96 @@ namespace gretl {
 
 using Int = unsigned int;  ///< gretl Int type
 
+class DataStore;
+
 struct StateBase;
 
 template <typename T, typename D = T>
 struct State;
 
-struct UpstreamStates;
+/// @brief UpstreamState is a wrapper for a states.  Its used in external-facing interfaces to ensure const correctness
+/// for users to encourage correct usage.
+struct UpstreamState {
+  Int step_;              ///< step
+  DataStore* dataStore_;  ///< datastore
 
-struct DownstreamState;
+  /// @brief get underlying value
+  template <typename T>
+  const T& get() const;
+
+  /// @brief get underlying dual value
+  template <typename D, typename T>
+  D& get_dual() const;
+};
+
+/// @brief UpstreamStates is a wrapper for a vector of states.  Its used in external-facing interfaces to ensure const
+/// correctness for users to encourage correct usage.
+struct UpstreamStates {
+  /// @brief Default constructor to use in std containers
+  UpstreamStates() = default;
+
+  /// @brief Constructor for upstream states
+  /// @param store datastore
+  /// @param steps vector of upstream steps
+  UpstreamStates(DataStore& store, std::vector<Int> steps)
+  {
+    for (Int s : steps) {
+      states_.push_back({s, &store});
+    }
+  }
+
+  /// @brief Accessor for individual upstream states
+  /// @param index index
+  template <typename IntT>
+  const UpstreamState& operator[](IntT index) const
+  {
+    return states_[static_cast<size_t>(index)];
+  }
+
+  /// @brief Accessor for individual upstream states
+  /// @param index index
+  const UpstreamState& operator[](Int index) const { return states_[index]; }
+
+  /// @brief Number of upstream states
+  Int size() const { return static_cast<Int>(states_.size()); }
+
+  /// @brief Vector of upstream step indices
+  const std::vector<UpstreamState>& states() const { return states_; }
+
+ private:
+  std::vector<UpstreamState> states_;  ///< states
+};
+
+/// @brief DownstreamState is a wrapper for a state.  Its used in external-facing interfaces to ensure const correctness
+/// for users to encourage correct usage.
+struct DownstreamState {
+  /// @brief Constructor
+  /// @param s datastore
+  /// @param step step
+  DownstreamState(DataStore* s, Int step) : dataStore_(s), step_(step) {}
+
+  /// @brief set underlying value (copy)
+  template <typename T, typename D = T>
+  void set(const T& t);
+
+  /// @brief set underlying value (move)
+  template <typename T, typename D = std::decay_t<T>>
+  void set(T&& t);
+
+  /// @brief get underlying value
+  template <typename T, typename D = T>
+  const T& get() const;
+
+  /// @brief get underlying dual value
+  template <typename D, typename T = D>
+  const D& get_dual() const;
+
+  friend class DataStore;
+
+ private:
+  DataStore* dataStore_;  ///< datastore
+  Int step_;              ///< step
+};
 
 /// @brief ZeroDual function type
 template <typename T, typename D = T>
@@ -274,5 +356,41 @@ class DataStore {
   friend struct UpstreamState;
   friend struct DownstreamState;
 };
+
+template <typename T>
+const T& UpstreamState::get() const
+{
+  return dataStore_->get_primal<T>(step_);
+}
+
+template <typename D, typename T>
+D& UpstreamState::get_dual() const
+{
+  return dataStore_->get_dual<D, T>(step_);
+}
+
+template <typename T, typename D>
+void DownstreamState::set(const T& t)
+{
+  dataStore_->set_primal(step_, t);
+}
+
+template <typename T, typename D>
+void DownstreamState::set(T&& t)
+{
+  dataStore_->set_primal(step_, std::forward<T>(t));
+}
+
+template <typename T, typename D>
+const T& DownstreamState::get() const
+{
+  return dataStore_->get_primal<T>(step_);
+}
+
+template <typename D, typename T>
+const D& DownstreamState::get_dual() const
+{
+  return dataStore_->get_dual<D, T>(step_);
+}
 
 }  // namespace gretl
