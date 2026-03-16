@@ -225,12 +225,12 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
     }
   }
 
-  evals_.emplace_back([=](const UpstreamStates&, DownstreamState&) {
+  evals_.emplace_back([this](const UpstreamStates&, DownstreamState&) {
     std::cout << "eval not implemented for step " << currentStep_ << std::endl;
     gretl_assert(false);
   });
 
-  vjps_.emplace_back([=](UpstreamStates&, const DownstreamState&) {
+  vjps_.emplace_back([this](UpstreamStates&, const DownstreamState&) {
     std::cout << "vjp not implemented for step " << currentStep_ << std::endl;
     gretl_assert(false);
   });
