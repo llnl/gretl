@@ -29,9 +29,9 @@ void DataStore::back_prop()
 template <typename Func>
 void for_each_active_upstream(const DataStore* dataStore, size_t step, const Func& func)
 {
-  for (const auto& upstream : dataStore->upstreams_[step].states()) {
-    if (!dataStore->is_persistent(upstream.step_)) {
-      func(upstream.step_);
+  for (Int upstreamStep : dataStore->upstreamSteps_[step]) {
+    if (!dataStore->is_persistent(upstreamStep)) {
+      func(upstreamStep);
     }
   }
   for (Int upstreamStepPassingThrough : dataStore->passthroughs_[step]) {
@@ -98,7 +98,7 @@ void DataStore::resize(Int newSize)
                        std::to_string(newSize) + std::string(" ") + std::to_string(currentStep_));
   states_.resize(newSize);
   duals_.resize(newSize);
-  upstreams_.resize(newSize);
+  upstreamSteps_.resize(newSize);
   evals_.resize(newSize);
   vjps_.resize(newSize);
   active_.resize(newSize);
@@ -119,7 +119,7 @@ void DataStore::reset_for_backprop()
 
 void DataStore::vjp(StateBase& state) { state.evaluate_vjp(); }
 
-bool DataStore::is_persistent(Int step) const { return !upstreams_[step].size(); }
+bool DataStore::is_persistent(Int step) const { return upstreamSteps_[step].empty(); }
 
 void DataStore::reverse_state()
 {
@@ -128,7 +128,7 @@ void DataStore::reverse_state()
     checkpointStrategy_->erase_step(currentStep_ - 1);
   }
   --currentStep_;
-  if (upstreams_[currentStep_].size()) {
+  if (!upstreamSteps_[currentStep_].empty()) {
     fetch_state_data(currentStep_ - 1);
     vjp(*states_[currentStep_]);
     clear_usage(currentStep_);
@@ -195,7 +195,7 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
     Int upstreamStep = u.step();
     upstreamSteps.push_back(upstreamStep);
   }
-  upstreams_.emplace_back(*this, upstreamSteps);
+  upstreamSteps_.emplace_back(std::move(upstreamSteps));
 
   for (auto& u : upstreams) {
     Int upstreamStep = u.step();
@@ -225,13 +225,13 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
     }
   }
 
-  evals_.emplace_back([=](const UpstreamStates&, DownstreamState&) {
-    std::cout << "eval not implemented for step " << currentStep_ << std::endl;
+  evals_.emplace_back([step](const UpstreamStates&, DownstreamState&) {
+    std::cout << "eval not implemented for step " << step << std::endl;
     gretl_assert(false);
   });
 
-  vjps_.emplace_back([=](UpstreamStates&, const DownstreamState&) {
-    std::cout << "vjp not implemented for step " << currentStep_ << std::endl;
+  vjps_.emplace_back([step](UpstreamStates&, const DownstreamState&) {
+    std::cout << "vjp not implemented for step " << step << std::endl;
     gretl_assert(false);
   });
 
@@ -241,7 +241,7 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
   ++currentStep_;
   gretl_assert(currentStep_ == states_.size());
   gretl_assert(currentStep_ == duals_.size());
-  gretl_assert(currentStep_ == upstreams_.size());
+  gretl_assert(currentStep_ == upstreamSteps_.size());
   gretl_assert(currentStep_ == passthroughs_.size());
   gretl_assert(currentStep_ == active_.size());
   gretl_assert(currentStep_ == usageCount_.size());
@@ -356,8 +356,8 @@ void DataStore::print_graph() const
     std::cout << i << ", act: " << std::setw(3) << active_[i] << ":" << std::setw(3) << usageCount_[i] << ":"
               << std::setw(3) << states_[i]->data_.use_count() << ":" << std::setw(3)
               << (states_[i]->primal() != nullptr) << ",    ups: ";
-    for (auto& v : upstreams_[i].states()) {
-      std::cout << v.step_ << " ";
+    for (Int upstreamStep : upstreamSteps_[i]) {
+      std::cout << upstreamStep << " ";
     }
     std::cout << ", pass: ";
     for (auto& v : passthroughs_[i]) {

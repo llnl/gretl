@@ -61,9 +61,9 @@ class DataStore {
   explicit DataStore(std::unique_ptr<CheckpointStrategy> strategy);
 
   /// @brief virtual destructor. Must clear states_ first because StateBase
-  /// destructors call try_to_free() which accesses upstreams_ and other members.
+  /// destructors call try_to_free() which accesses upstreamSteps_ and other members.
   /// Without this, implicit reverse-declaration-order destruction would destroy
-  /// upstreams_ before states_, causing use-after-free.
+  /// upstreamSteps_ before states_, causing use-after-free.
   /// @brief virtual destructor
   virtual ~DataStore()
   {
@@ -242,7 +242,7 @@ class DataStore {
 
   std::vector<std::unique_ptr<StateBase>> states_;  ///< states for steps
   std::vector<std::unique_ptr<std::any>> duals_;    ///< duals for steps
-  std::vector<UpstreamStates> upstreams_;           ///< upstreams dependencies for steps
+  std::vector<std::vector<Int>> upstreamSteps_;     ///< upstream step dependencies for steps
   std::vector<EvalT> evals_;                        ///< forward evaluation functions for steps
   std::vector<VjpT> vjps_;                          ///< vector-jacobian product functions for steps
   std::vector<bool> active_;                        ///< active status for steps
