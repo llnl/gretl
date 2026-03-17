@@ -63,7 +63,7 @@ class DataStore {
   /// @brief virtual destructor. Must clear states_ first because StateBase
   /// destructors call try_to_free() which accesses upstreamSteps_ and other members.
   /// Without this, implicit reverse-declaration-order destruction would destroy
-  /// upstreamSteps_ before states_, causing use-after-free.
+  /// upstreamSteps_ before states_.
   /// @brief virtual destructor
   virtual ~DataStore()
   {
