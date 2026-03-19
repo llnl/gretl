@@ -13,8 +13,7 @@
 
 namespace gretl {
 
-DataStore::DataStore(size_t checkpoint_budget)
-    : DataStore(std::make_unique<WangCheckpointStrategy>(checkpoint_budget))
+DataStore::DataStore(size_t checkpoint_budget) : DataStore(std::make_unique<WangCheckpointStrategy>(checkpoint_budget))
 {
 }
 
