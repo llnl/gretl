@@ -68,10 +68,7 @@ class DataStore {
   /// Without this, implicit reverse-declaration-order destruction would destroy
   /// upstreamSteps_ before states_.
   /// @brief virtual destructor
-  virtual ~DataStore()
-  {
-    lifetimeToken_.reset();
-  }
+  virtual ~DataStore() { lifetimeToken_.reset(); }
 
   /// @brief create a new state in the graph, store it, return it
   template <typename T, typename D>
