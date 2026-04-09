@@ -47,10 +47,12 @@ struct StateBase {
       data_ = oldState.data_;
       return *this;
     }
+    auto* oldDataStore = data_->dataStore_;
+    auto oldLifetimeToken = data_->lifetimeToken_;
     Int s = step();
     data_ = oldState.data_;
-    if (auto* dataStore = lock_data_store()) {
-      dataStore->try_to_free(s);
+    if (!oldLifetimeToken.expired()) {
+      oldDataStore->try_to_free(s);
     }
     return *this;
   }
@@ -61,10 +63,12 @@ struct StateBase {
     if (!data_) {
       return;
     }
+    auto* oldDataStore = data_->dataStore_;
+    auto oldLifetimeToken = data_->lifetimeToken_;
     Int s = step();
     data_ = nullptr;
-    if (auto* dataStore = lock_data_store()) {
-      dataStore->try_to_free(s);
+    if (!oldLifetimeToken.expired()) {
+      oldDataStore->try_to_free(s);
     }
   }
 

@@ -1052,6 +1052,60 @@ TEST(DestructorTiming, StateOutlivesSharedOwner)
   SUCCEED();
 }
 
+TEST(DestructorTiming, LastExternalHandleDestructionStillEvictsInactiveState)
+{
+  DataStore store(std::make_unique<gretl::WangCheckpointStrategy>(3));
+  auto x0 = store.create_state<double, double>(2.0);
+
+  gretl::Int step = 0;
+
+  {
+    auto held = gretl::axpb(3.0, x0, 1.0);
+    step = held.step();
+
+    // Materialize both primal and dual so the test can verify they are dropped.
+    EXPECT_NEAR(held.get(), 7.0, 1e-14);
+    EXPECT_NEAR(held.get_dual(), 0.0, 1e-14);
+
+    store.active_[step] = false;
+    store.usageCount_[step] = 0;
+
+    // With an external handle alive, try_to_free() should not evict yet.
+    store.try_to_free(step);
+    EXPECT_TRUE(store.states_[step]->primal());
+    EXPECT_TRUE(store.duals_[step]);
+  }
+
+  // Once the last external handle dies, its destructor should retry eviction.
+  EXPECT_FALSE(store.states_[step]->primal());
+  EXPECT_FALSE(store.duals_[step]);
+}
+
+TEST(AssignmentOperator, ReassigningLastExternalHandleStillEvictsInactiveState)
+{
+  DataStore store(std::make_unique<gretl::WangCheckpointStrategy>(3));
+  auto x0 = store.create_state<double, double>(2.0);
+
+  auto held = gretl::axpb(3.0, x0, 1.0);
+  gretl::Int old_step = held.step();
+
+  EXPECT_NEAR(held.get(), 7.0, 1e-14);
+  EXPECT_NEAR(held.get_dual(), 0.0, 1e-14);
+
+  store.active_[old_step] = false;
+  store.usageCount_[old_step] = 0;
+
+  // The old step is inactive, but the external handle still keeps it alive.
+  store.try_to_free(old_step);
+  EXPECT_TRUE(store.states_[old_step]->primal());
+  EXPECT_TRUE(store.duals_[old_step]);
+
+  held = x0;
+
+  EXPECT_FALSE(store.states_[old_step]->primal());
+  EXPECT_FALSE(store.duals_[old_step]);
+}
+
 // ---------------------------------------------------------------------------
 // Helper: high-resolution timer
 // ---------------------------------------------------------------------------

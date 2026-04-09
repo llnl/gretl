@@ -70,8 +70,6 @@ class DataStore {
   /// @brief virtual destructor
   virtual ~DataStore()
   {
-    // Set flag to prevent try_to_free() from accessing freed memory during destruction
-    isDestroying_ = true;
     lifetimeToken_.reset();
   }
 
@@ -267,8 +265,6 @@ class DataStore {
   /// @brief specifies if graph is in construction or back-prop mode.  This is used for internal asserts.
   bool stillConstructingGraph_ = true;
 
-  /// @brief flag to prevent accessing freed memory during destruction
-  bool isDestroying_ = false;
   std::shared_ptr<void> lifetimeToken_ = std::make_shared<int>(0);
 
   friend struct StateBase;
