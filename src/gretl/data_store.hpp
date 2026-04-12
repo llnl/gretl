@@ -80,6 +80,9 @@ class DataStore {
   {
     State<T, D> state(this, states_.size(), std::make_shared<std::any>(t), initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), {});
+    if (!is_tracking()) {
+      state.set_vjp([](UpstreamStates&, const DownstreamState&) {});
+    }
     return state;
   }
 
@@ -118,6 +121,9 @@ class DataStore {
     auto t = std::make_shared<std::any>(T{});
     State<T, D> state(this, states_.size(), t, initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), upstreams);
+    if (!is_tracking()) {
+      state.set_vjp([](UpstreamStates&, const DownstreamState&) {});
+    }
     return state;
   }
 
@@ -266,6 +272,15 @@ class DataStore {
   /// @brief specifies if graph is in construction or back-prop mode.  This is used for internal asserts.
   bool stillConstructingGraph_ = true;
 
+  /// @brief flag to control whether states compute gradients (VJP)
+  bool is_tracking_enabled_ = true;
+
+  /// @brief Query tracking status
+  bool is_tracking() const { return is_tracking_enabled_; }
+
+  /// @brief Set tracking status
+  void set_tracking(bool enable) { is_tracking_enabled_ = enable; }
+
   /// @brief flag to prevent accessing freed memory during destruction
   bool isDestroying_ = false;
 
@@ -276,6 +291,27 @@ class DataStore {
 
   friend struct UpstreamState;
   friend struct DownstreamState;
+};
+
+/// @brief RAII scoped guard to temporarily disable graph tracking for a DataStore.
+/// When tracking is disabled, newly created states will receive a no-op VJP, 
+/// acting as "stop-gradient" nodes during back-propagation. They are still 
+/// added to the graph and managed by the checkpointer normally.
+struct ScopedGraphDisable {
+  DataStore& store_;
+  bool previous_tracking_;
+
+  explicit ScopedGraphDisable(DataStore& store)
+      : store_(store), previous_tracking_(store.is_tracking())
+  {
+    store_.set_tracking(false);
+  }
+
+  ~ScopedGraphDisable() { store_.set_tracking(previous_tracking_); }
+
+  // Prevent copying
+  ScopedGraphDisable(const ScopedGraphDisable&) = delete;
+  ScopedGraphDisable& operator=(const ScopedGraphDisable&) = delete;
 };
 
 }  // namespace gretl
