@@ -12,18 +12,17 @@ namespace {
 State<double> picard_step(const State<double>& x, const State<double>& p, bool vjp_implemented = true)
 {
   if (vjp_implemented) {
-    return create_state<double, double>(
-        [](const double&) { return 0.0; },
-        [](const double& x_val, const double& p_val) {
-          // simple iteration: x = x * 0.5 + p
-          return x_val * 0.5 + p_val;
-        },
-        [](const double& /*x_val*/, const double& /*p_val*/, const double& /*f_val*/, double& dx, double& dp,
-           const double& df) {
-          dx += 0.5 * df;
-          dp += 1.0 * df;
-        },
-        x, p);
+    return create_state<double, double>([](const double&) { return 0.0; },
+                                        [](const double& x_val, const double& p_val) {
+                                          // simple iteration: x = x * 0.5 + p
+                                          return x_val * 0.5 + p_val;
+                                        },
+                                        [](const double& /*x_val*/, const double& /*p_val*/, const double& /*f_val*/,
+                                           double& dx, double& dp, const double& df) {
+                                          dx += 0.5 * df;
+                                          dp += 1.0 * df;
+                                        },
+                                        x, p);
   } else {
     return create_state<double, double>(
         [](const double&) { return 0.0; },
