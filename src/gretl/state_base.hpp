@@ -19,8 +19,12 @@ namespace gretl {
 /// @brief Constainer for DataStore, primal value and step index for a given state
 struct StateData {
   /// @brief constructor
-  StateData(DataStore* dataStore, std::shared_ptr<std::any> primal) : dataStore_(dataStore), primal_(primal) {}
+  StateData(DataStore* dataStore, std::weak_ptr<void> lifetimeToken, std::shared_ptr<std::any> primal)
+      : dataStore_(dataStore), lifetimeToken_(std::move(lifetimeToken)), primal_(primal)
+  {
+  }
   DataStore* dataStore_;                        ///< datastore
+  std::weak_ptr<void> lifetimeToken_;           ///< datastore lifetime token
   std::shared_ptr<std::any> primal_;            ///< value, stores as shared_ptr to std::any
   Int step_ = std::numeric_limits<Int>::max();  ///< step
 };
@@ -28,7 +32,10 @@ struct StateData {
 /// @brief Baseclass for State.  State stores type-erased value and step number in the graph.
 struct StateBase {
   /// @brief Construct state base from a date store and a type-erased values
-  StateBase(DataStore* store, const std::shared_ptr<std::any>& val) : data_(std::make_shared<StateData>(store, val)) {}
+  StateBase(DataStore* store, std::weak_ptr<void> lifetimeToken, const std::shared_ptr<std::any>& val)
+      : data_(std::make_shared<StateData>(store, std::move(lifetimeToken), val))
+  {
+  }
 
   /// @brief copy operator
   StateBase(const StateBase& oldState) { data_ = oldState.data_; }
@@ -40,12 +47,11 @@ struct StateBase {
       data_ = oldState.data_;
       return *this;
     }
-    auto* dataStore = &data_store();
+    auto* oldDataStore = data_->dataStore_;
+    auto oldLifetimeToken = data_->lifetimeToken_;
     Int s = step();
     data_ = oldState.data_;
-    if (dataStore) {
-      dataStore->try_to_free(s);
-    }
+    try_to_free_if_live(oldDataStore, oldLifetimeToken, s);
     return *this;
   }
 
@@ -55,12 +61,11 @@ struct StateBase {
     if (!data_) {
       return;
     }
-    auto* dataStore = &data_store();
+    auto* oldDataStore = data_->dataStore_;
+    auto oldLifetimeToken = data_->lifetimeToken_;
     Int s = step();
     data_ = nullptr;
-    if (dataStore) {
-      dataStore->try_to_free(s);
-    }
+    try_to_free_if_live(oldDataStore, oldLifetimeToken, s);
   }
 
   /// @brief get the underlying value
@@ -112,7 +117,12 @@ struct StateBase {
   void evaluate_vjp();
 
   /// @brief Datastore accessor
-  DataStore& data_store() const { return *data_->dataStore_; }
+  DataStore& data_store() const
+  {
+    auto* dataStore = lock_data_store();
+    gretl_assert_msg(dataStore, "Attempted to access an expired DataStore");
+    return *dataStore;
+  }
 
   /// @brief Get step
   Int step() const { return data_->step_; }
@@ -131,6 +141,24 @@ struct StateBase {
   size_t wild_count() const { return static_cast<size_t>(data_.use_count()) - 1; }
 
  protected:
+  static void try_to_free_if_live(DataStore* dataStore, const std::weak_ptr<void>& lifetimeToken, Int step)
+  {
+    if (!lifetimeToken.expired()) {
+      dataStore->try_to_free(step);
+    }
+  }
+
+  DataStore* lock_data_store() const
+  {
+    if (!data_) {
+      return nullptr;
+    }
+    if (data_->lifetimeToken_.expired()) {
+      return nullptr;
+    }
+    return data_->dataStore_;
+  }
+
   /// @brief state data which store step, and value information.  The shared_ptr allows tracking of the number of
   /// external usages of this state.
   std::shared_ptr<StateData> data_;

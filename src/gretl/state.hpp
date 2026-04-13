@@ -64,7 +64,9 @@ struct State : public StateBase {
   {
     gretl_assert(!upstreams.empty());
     auto new_val = std::make_shared<std::any>(T{});
-    State<T, D> state(&data_store(), data_store().states_.size(), new_val, initialize_zero_dual_);
+    gretl_assert_msg(!data_.get()->lifetimeToken_.expired(), "Attempted to clone a state with an expired DataStore");
+    State<T, D> state(data_.get()->dataStore_, data_.get()->lifetimeToken_, data_store().states_.size(), new_val,
+                      initialize_zero_dual_);
     data_store().add_state(std::make_unique<State<T, D>>(state), upstreams);
     return state;
   }
@@ -87,9 +89,9 @@ struct State : public StateBase {
   /// @param val type-erased value which is the data for the state
   /// @param initialize_zero_dual std::function which takes a primal value type T, and returns a zeroed out, but memory
   /// allocated dual type D
-  State(DataStore* store, size_t step, std::shared_ptr<std::any> val,
+  State(DataStore* store, std::weak_ptr<void> lifetimeToken, size_t step, std::shared_ptr<std::any> val,
         const InitializeZeroDual<T, D>& initialize_zero_dual)
-      : StateBase(store, val), initialize_zero_dual_(initialize_zero_dual)
+      : StateBase(store, std::move(lifetimeToken), val), initialize_zero_dual_(initialize_zero_dual)
   {
     reset_step(static_cast<Int>(step));
   }
