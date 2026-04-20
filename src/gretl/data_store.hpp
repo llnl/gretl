@@ -76,6 +76,9 @@ class DataStore {
   {
     State<T, D> state(this, lifetimeToken_, states_.size(), std::make_shared<std::any>(t), initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), {});
+    if (!gradients_enabled()) {
+      state.set_vjp([](UpstreamStates&, const DownstreamState&) {});
+    }
     return state;
   }
 
@@ -114,6 +117,9 @@ class DataStore {
     auto t = std::make_shared<std::any>(T{});
     State<T, D> state(this, lifetimeToken_, states_.size(), t, initial_zero_dual);
     add_state(std::make_unique<State<T, D>>(state), upstreams);
+    if (!gradients_enabled()) {
+      state.set_vjp([](UpstreamStates&, const DownstreamState&) {});
+    }
     return state;
   }
 
@@ -244,6 +250,7 @@ class DataStore {
   std::vector<std::vector<Int>> upstreamSteps_;     ///< upstream step dependencies for steps
   std::vector<EvalT> evals_;                        ///< forward evaluation functions for steps
   std::vector<VjpT> vjps_;                          ///< vector-jacobian product functions for steps
+  std::vector<bool> requires_vjp_;                  ///< flag to indicate if state requires VJP evaluation
   std::vector<bool> active_;                        ///< active status for steps
   std::vector<Int> usageCount_;  ///< count how many times a step is used in some downstream still is the scope of the
                                  ///< checkpoint algorithm
@@ -262,6 +269,17 @@ class DataStore {
   /// @brief specifies if graph is in construction or back-prop mode.  This is used for internal asserts.
   bool stillConstructingGraph_ = true;
 
+  /// @brief flag to control whether states compute gradients (VJP)
+  bool gradients_enabled_ = true;
+
+  /// @brief Query if gradients are enabled for newly created states
+  bool gradients_enabled() const { return gradients_enabled_; }
+
+  /// @brief Set whether gradients (VJPs) should be recorded for newly created states
+  void set_gradients_enabled(bool enable) { gradients_enabled_ = enable; }
+
+  /// @brief flag to prevent accessing freed memory during destruction
+  bool isDestroying_ = false;
   std::shared_ptr<void> lifetimeToken_ = std::make_shared<int>(0);
 
   friend struct StateBase;

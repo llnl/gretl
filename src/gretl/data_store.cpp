@@ -106,6 +106,7 @@ void DataStore::resize(Int newSize)
   upstreamSteps_.resize(newSize);
   evals_.resize(newSize);
   vjps_.resize(newSize);
+  requires_vjp_.resize(newSize);
   active_.resize(newSize);
   usageCount_.resize(newSize);
   lastStepUsed_.resize(newSize);
@@ -133,9 +134,12 @@ void DataStore::reverse_state()
     checkpointStrategy_->erase_step(currentStep_ - 1);
   }
   --currentStep_;
-  if (!upstreamSteps_[currentStep_].empty()) {
+  if (requires_vjp_[currentStep_] && !upstreamSteps_[currentStep_].empty()) {
     fetch_state_data(currentStep_ - 1);
     vjp(*states_[currentStep_]);
+    clear_usage(currentStep_);
+    checkpointStrategy_->erase_step(currentStep_ - 1);
+  } else if (!upstreamSteps_[currentStep_].empty()) {
     clear_usage(currentStep_);
     checkpointStrategy_->erase_step(currentStep_ - 1);
   }
@@ -183,6 +187,7 @@ void DataStore::add_state(std::unique_ptr<StateBase> newState, const std::vector
   active_.push_back(true);
   lastStepUsed_.push_back(step);
   passthroughs_.push_back({});
+  requires_vjp_.push_back(gradients_enabled());
 
   bool persistent = upstreams.size() == 0;
   if (persistent) {
